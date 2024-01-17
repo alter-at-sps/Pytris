@@ -81,7 +81,9 @@ level = [] # row major layout
 # points to the current piece thats falling
 falling_piece = []
 falling_piece_pos = [0, 0, 0] # x, y, rot
-falling_piece_color = 0
+falling_piece_color = 1
+
+falling_piece = piece_lib[2]
 
 # format: [row_index, anim_timestep]
 active_row_anims = []
@@ -104,7 +106,7 @@ for y in range(level_size[1]):
     level.append(row)
 
     for x in range(level_size[0]):
-        row.append(1)
+        row.append(0)
 
 # == update code ==
 
@@ -145,6 +147,15 @@ def translate_falling_piece():
     # copy to avoid modifying the lib
     tiles = falling_piece.copy()
 
+    for i in range(len(tiles)):
+        # rotate piece
+        for j in range(falling_piece_pos[2]):
+            tiles[i] = (tiles[i][1], -tiles[i][0]) # 90 degree vector rotation
+
+        # translate piece
+
+        tiles[i] = (tiles[i][0] + falling_piece_pos[0], tiles[i][1] + falling_piece_pos[1])
+
     return tiles
 
 def world_to_screen_space(p):
@@ -161,11 +172,11 @@ def game_update():
         
     keys = pygame.key.get_pressed()
 
-    if keys[pygame.K_w]:
-        pass
+    if keys[pygame.K_a]:
+        falling_piece_pos[2] = (falling_piece_pos[2] + 1) % 4
 
-    elif keys[pygame.K_s]:
-        pass
+    elif keys[pygame.K_d]:
+        falling_piece_pos[2] = (falling_piece_pos[2] - 1) % 4
 
     elif keys[pygame.K_UP]:
         pass
