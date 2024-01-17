@@ -9,6 +9,16 @@ res = (1280, 720)
 desend_speed = 5
 level_size = (10, 20)
 
+tile_size = 15
+tile_margins = 2
+
+border_thickness = 15
+border_margins = 4
+
+border_color = (200, 200, 200)
+none_color = (16, 16, 16)
+
+# contains positions of tiles relative to the center of rotation of a piece
 piece_lib = [
     [ # square
         (0, 0),
@@ -54,30 +64,49 @@ piece_lib = [
     ]
 ]
 
+color_lib = [
+    (102, 255, 255),
+    (255, 0, 0),
+    (128, 255, 0),
+    (127, 0, 255),
+    (255, 128, 0)
+]
+
+# == global vars ==
+
+# 0 - empty
+# not 0 - filled; value represents color of the tile
+level = [] # row major layout
+
+# points to the current piece thats falling
+falling_piece = []
+falling_piece_pos = [0, 0, 0] # x, y, rot
+falling_piece_color = 0
+
+# format: [row_index, anim_timestep]
+active_row_anims = []
+
+# calculate proper render area size based on config
+render_area_size = (border_thickness * 2 + border_margins * 2 + level_size[0] * (tile_size + tile_margins * 2), border_thickness * 2 + border_margins * 2 + level_size[1] * (tile_size + tile_margins * 2))
+render_area_border = (res[0] // 2 - render_area_size[0] // 2, res[1] // 2 - render_area_size[1] // 2, render_area_size[0], render_area_size[1])
+
+current_time = time.time()
+delta_time = 0
+
 # == init ==
 
 pygame.init()
 
 win = pygame.display.set_mode(res, vsync=1)
 
-# == update code ==
-
-# 0 - empty
-# not 0 - filled; value represents color of the tile
-level = [] # row major layout
-
-for y in range(level_size[0]):
+for y in range(level_size[1]):
     row = []
     level.append(row)
 
-    for x in row:
-        level.append(0)
+    for x in range(level_size[0]):
+        row.append(1)
 
-# format: [row_index, anim_timestep]
-active_row_anims = []
-
-current_time = time.time()
-delta_time = 0
+# == update code ==
 
 # queues row completion animation
 def queue_row_anim(i):
@@ -112,6 +141,15 @@ def check_rows():
         if fully_filled:
             queue_row_anim(i)
 
+def translate_falling_piece():
+    # copy to avoid modifying the lib
+    tiles = falling_piece.copy()
+
+    return tiles
+
+def world_to_screen_space(p):
+    return (render_area_border[0] + border_thickness + border_margins + tile_margins + p[0] * (tile_size + tile_margins * 2), render_area_border[1] + border_thickness + border_margins + tile_margins + p[1] * (tile_size + tile_margins * 2))
+
 def game_update():
     # events
     for e in pygame.event.get():
@@ -140,9 +178,30 @@ def game_update():
     check_rows()
 
 def draw_frame():
-    win.fill((16, 16, 16))
-
     update_anim()
+    
+    win.fill(none_color)
+
+    # draw border
+    pygame.draw.rect(win, border_color, render_area_border)
+    pygame.draw.rect(win, none_color, (render_area_border[0] + border_thickness, render_area_border[1] + border_thickness, render_area_border[2] - border_thickness * 2, render_area_border[3] - border_thickness * 2))
+
+    # draw level
+
+    for y, row in enumerate(level):
+        for x, tile in enumerate(row):
+            # TODO: render active anims
+
+            if not tile == 0:
+                pos = world_to_screen_space((x, y))
+                pygame.draw.rect(win, color_lib[tile - 1], (pos[0], pos[1], tile_size, tile_size))
+
+    # draw falling piece
+
+    if not len(falling_piece) == 0:
+        for tile_pos in translate_falling_piece():
+            pos = world_to_screen_space(tile_pos)
+            pygame.draw.rect(win, color_lib[falling_piece_color - 1], (pos[0], pos[1], tile_size, tile_size))
 
     pygame.display.flip()
 
