@@ -1,6 +1,7 @@
 import pygame
 import time
 import math
+import random
 
 # == config ==
 
@@ -86,12 +87,19 @@ falling_piece_color = 0
 # format: [row_index, anim_timestep]
 active_row_anims = []
 
+screenshake_amount = 0
+screenshake_offset = (.0, .0)
+
 # calculate proper render area size based on config
 render_area_size = (border_thickness * 2 + border_margins * 2 + level_size[0] * (tile_size + tile_margins * 2), border_thickness * 2 + border_margins * 2 + level_size[1] * (tile_size + tile_margins * 2))
 render_area_border = (res[0] // 2 - render_area_size[0] // 2, res[1] // 2 - render_area_size[1] // 2, render_area_size[0], render_area_size[1])
 
 current_time = time.time()
 delta_time = 0
+
+update_timestamp = time.time()
+
+was_pressed = [ False, False, False, False, False ]
 
 # == init ==
 
@@ -204,10 +212,12 @@ def pick_next_piece():
 
     p_index += 1
 
-def game_update():
+def process_user():
     global falling_piece
     global falling_piece_pos
     global falling_piece_color
+    global screenshake_amount
+    global was_pressed
 
     # events
     for e in pygame.event.get():
@@ -219,27 +229,60 @@ def game_update():
         
     keys = pygame.key.get_pressed()
 
-    if keys[pygame.K_a]:
+    # some delicious movement code spaghetti
+    if keys[pygame.K_a] and was_pressed[0] == False:
+        was_pressed[0] = True
         falling_piece_pos[0] -= 1
         if not check_falling_piece():
             falling_piece_pos[0] += 1
 
-    elif keys[pygame.K_d]:
+    if not keys[pygame.K_a] and was_pressed[0]:
+        was_pressed[0] = False
+
+    if keys[pygame.K_d] and was_pressed[1] == False:
+        was_pressed[1] = True
         falling_piece_pos[0] += 1
         if not check_falling_piece():
             falling_piece_pos[0] -= 1
 
-    elif keys[pygame.K_LEFT] and not falling_piece == piece_lib[0]:
+    if not keys[pygame.K_d] and was_pressed[1]:
+        was_pressed[1] = False
+
+    if keys[pygame.K_e] and was_pressed[2] == False and not falling_piece == piece_lib[0]:
+        was_pressed[2] = True
         falling_piece_pos[2] = (falling_piece_pos[2] - 1) % 4
         if not check_falling_piece():
-            falling_piece_pos[0] = (falling_piece_pos[2] + 1) % 4
+            falling_piece_pos[2] = (falling_piece_pos[2] + 1) % 4
 
-    elif keys[pygame.K_RIGHT] and not falling_piece == piece_lib[0]:
+    if not keys[pygame.K_e] and was_pressed[2]:
+        was_pressed[2] = False
+
+    if keys[pygame.K_q] and was_pressed[3] == False and not falling_piece == piece_lib[0]:
+        was_pressed[3] = True
         falling_piece_pos[2] = (falling_piece_pos[2] + 1) % 4
         if not check_falling_piece():
-            falling_piece_pos[0] = (falling_piece_pos[2] - 1) % 4
+            falling_piece_pos[2] = (falling_piece_pos[2] - 1) % 4
 
-    # main update
+    if not keys[pygame.K_q] and was_pressed[3]:
+        was_pressed[3] = False
+
+    if keys[pygame.K_s] and was_pressed[4] == False:
+        was_pressed[4] = True
+        screenshake_amount += 20
+
+        while check_falling_piece():
+            falling_piece_pos[1] += 1
+
+        falling_piece_pos[1] -= 1
+
+    if not keys[pygame.K_s] and was_pressed[4]:
+        was_pressed[4] = False
+
+def game_update():
+    global falling_piece
+    global falling_piece_pos
+    global falling_piece_color
+    global screenshake_amount
 
     check_rows()
 
@@ -254,14 +297,32 @@ def game_update():
 
         pick_next_piece()
 
+        # check game over
+        if not check_falling_piece():
+            pygame.quit()
+            exit()
+
 def draw_frame():
+    global falling_piece_pos
+    global screenshake_amount
+    global screenshake_offset
+
+    # per draw updates
+
     update_anim()
+
+    screenshake_amount = max(screenshake_amount - delta_time * 40, 0)
+    screenshake_offset = (random.random() * 2 - 1, random.random() * 2 - 1)
+
+    shake = (screenshake_offset[0] * screenshake_amount, screenshake_offset[1] * screenshake_amount)
+
+    # rendering
     
     win.fill(none_color)
 
     # draw border
-    pygame.draw.rect(win, border_color, render_area_border)
-    pygame.draw.rect(win, none_color, (render_area_border[0] + border_thickness, render_area_border[1] + border_thickness, render_area_border[2] - border_thickness * 2, render_area_border[3] - border_thickness * 2))
+    pygame.draw.rect(win, border_color, (render_area_border[0] + shake[0], render_area_border[1] + shake[1], render_area_border[2], render_area_border[3]))
+    pygame.draw.rect(win, none_color, (render_area_border[0] + border_thickness + shake[0], render_area_border[1] + border_thickness + shake[1], render_area_border[2] - border_thickness * 2, render_area_border[3] - border_thickness * 2))
 
     # draw level
 
@@ -271,14 +332,31 @@ def draw_frame():
 
             if not tile == 0:
                 pos = world_to_screen_space((x, y))
-                pygame.draw.rect(win, color_lib[tile - 1], (pos[0], pos[1], tile_size, tile_size))
+                pygame.draw.rect(win, color_lib[tile - 1], (pos[0] + shake[0], pos[1] + shake[1], tile_size, tile_size))
+
+    # draw piece ghost
+            
+    if not len(falling_piece) == 0:
+        old_falling_pos = falling_piece_pos.copy()
+
+        while check_falling_piece():
+            falling_piece_pos[1] += 1
+
+        falling_piece_pos[1] -= 1
+
+        for tile_pos in translate_falling_piece():
+            pos = world_to_screen_space(tile_pos)
+            col = color_lib[falling_piece_color - 1]
+            pygame.draw.rect(win, (max(col[0] - 96, 0), max(col[1] - 96, 0), max(col[2] - 96, 0)), (pos[0] + shake[0], pos[1] + shake[1], tile_size, tile_size))
+
+        falling_piece_pos = old_falling_pos
 
     # draw falling piece
 
     if not len(falling_piece) == 0:
         for tile_pos in translate_falling_piece():
             pos = world_to_screen_space(tile_pos)
-            pygame.draw.rect(win, color_lib[falling_piece_color - 1], (pos[0], pos[1], tile_size, tile_size))
+            pygame.draw.rect(win, color_lib[falling_piece_color - 1], (pos[0] + shake[0], pos[1] + shake[1], tile_size, tile_size))
 
     pygame.display.flip()
 
@@ -290,11 +368,12 @@ while True:
     delta_time = time.time() - current_time
     current_time = time.time()
 
-    # if delta_time == 0:
-    #     continue
+    # update only every timestep
+    if time.time() - update_timestamp >= 0.5:
+        update_timestamp = time.time()
 
-    game_update()
+        game_update()
 
+    # render and pull input as fast as possible (or at vsync)
+    process_user()
     draw_frame()
-
-    time.sleep(.5)
