@@ -81,9 +81,7 @@ level = [] # row major layout
 # points to the current piece thats falling
 falling_piece = []
 falling_piece_pos = [0, 0, 0] # x, y, rot (in world coord system; starting from top-left)
-falling_piece_color = 1
-
-falling_piece = piece_lib[2]
+falling_piece_color = 0
 
 # format: [row_index, anim_timestep]
 active_row_anims = []
@@ -106,6 +104,9 @@ for y in range(level_size[1]):
     level.append(row)
 
     for x in range(level_size[0]):
+        # if y == 19 and x != 0:
+        #     row.append(1)
+        # else:
         row.append(0)
 
 # == update code ==
@@ -117,8 +118,15 @@ def queue_row_anim(i):
 # called after a row animation finishes
 def on_row_anim_finished(i):
     # offset level
-    for j in range(i + 1, len(level)):
-        level[j] = level[j + 1]
+    for j in range(i, 0, -1):
+        if not j == 0:
+            level[j] = level[j - 1]
+        else:
+            new_row = []
+            level[j] = new_row
+
+            for i in range(level_size[0]):
+                new_row.append(0)
 
     # offset active anims
     for anim in active_row_anims:
@@ -143,7 +151,7 @@ def check_rows():
                 fully_filled = False
         
         if fully_filled:
-            queue_row_anim(i)
+            on_row_anim_finished(i) # temp until anims
 
 # translates piece position local coords to world coords
 def translate_falling_piece():
@@ -158,9 +166,6 @@ def translate_falling_piece():
         # translate piece
 
         tiles[i] = (tiles[i][0] + falling_piece_pos[0], tiles[i][1] + falling_piece_pos[1])
-
-        # to world coords
-        # tiles[i] = (tiles[i][1], tiles[i][0])
 
     return tiles
 
@@ -215,16 +220,24 @@ def game_update():
     keys = pygame.key.get_pressed()
 
     if keys[pygame.K_a]:
-        falling_piece_pos[2] = (falling_piece_pos[2] + 1) % 4
+        falling_piece_pos[0] -= 1
+        if not check_falling_piece():
+            falling_piece_pos[0] += 1
 
     elif keys[pygame.K_d]:
+        falling_piece_pos[0] += 1
+        if not check_falling_piece():
+            falling_piece_pos[0] -= 1
+
+    elif keys[pygame.K_LEFT] and not falling_piece == piece_lib[0]:
         falling_piece_pos[2] = (falling_piece_pos[2] - 1) % 4
+        if not check_falling_piece():
+            falling_piece_pos[0] = (falling_piece_pos[2] + 1) % 4
 
-    elif keys[pygame.K_UP]:
-        pass
-
-    elif keys[pygame.K_DOWN]:
-        pass
+    elif keys[pygame.K_RIGHT] and not falling_piece == piece_lib[0]:
+        falling_piece_pos[2] = (falling_piece_pos[2] + 1) % 4
+        if not check_falling_piece():
+            falling_piece_pos[0] = (falling_piece_pos[2] - 1) % 4
 
     # main update
 
@@ -271,6 +284,8 @@ def draw_frame():
 
 # == game loop ==
 
+pick_next_piece()
+
 while True:
     delta_time = time.time() - current_time
     current_time = time.time()
@@ -282,4 +297,4 @@ while True:
 
     draw_frame()
 
-    time.sleep(.1)
+    time.sleep(.5)
