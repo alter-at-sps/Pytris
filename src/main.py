@@ -80,7 +80,7 @@ level = [] # row major layout
 
 # points to the current piece thats falling
 falling_piece = []
-falling_piece_pos = [0, 0, 0] # x, y, rot
+falling_piece_pos = [0, 0, 0] # x, y, rot (in world coord system; starting from top-left)
 falling_piece_color = 1
 
 falling_piece = piece_lib[2]
@@ -125,6 +125,7 @@ def on_row_anim_finished(i):
         if anim[0] > i:
             anim[0] -= 1
 
+# update animation timestamp
 def update_anim():
     for anim in active_row_anims:
         anim[1] += delta_time
@@ -132,6 +133,7 @@ def update_anim():
         if anim[1] > 1.0:
             active_row_anims.remove(anim)
 
+# check rows for filled rows and queue animation
 def check_rows():
     for i, row in enumerate(level):
         fully_filled = True
@@ -143,6 +145,7 @@ def check_rows():
         if fully_filled:
             queue_row_anim(i)
 
+# translates piece position local coords to world coords
 def translate_falling_piece():
     # copy to avoid modifying the lib
     tiles = falling_piece.copy()
@@ -156,12 +159,51 @@ def translate_falling_piece():
 
         tiles[i] = (tiles[i][0] + falling_piece_pos[0], tiles[i][1] + falling_piece_pos[1])
 
+        # to world coords
+        # tiles[i] = (tiles[i][1], tiles[i][0])
+
     return tiles
 
+# checks if the current falling piece is in a valid position
+def check_falling_piece():
+    tiles = translate_falling_piece()
+
+    for tile in tiles:
+        if tile[0] < 0 or tile[0] >= level_size[0]:
+            return False
+
+        if tile[1] < 0 or tile[1] >= level_size[1]:
+            return False
+        
+        if not level[tile[1]][tile[0]] == 0:
+            return False
+
+    return True
+
+# world coords to screen space (pixel) coords
 def world_to_screen_space(p):
     return (render_area_border[0] + border_thickness + border_margins + tile_margins + p[0] * (tile_size + tile_margins * 2), render_area_border[1] + border_thickness + border_margins + tile_margins + p[1] * (tile_size + tile_margins * 2))
 
+p_index = 0
+
+def pick_next_piece():
+    global p_index
+    global falling_piece
+    global falling_piece_pos
+    global falling_piece_color
+
+    falling_piece = piece_lib[p_index % len(piece_lib)]
+    falling_piece_color = (p_index % (len(color_lib))) + 1
+
+    falling_piece_pos = [level_size[0] // 2 - 1, 2, 0]
+
+    p_index += 1
+
 def game_update():
+    global falling_piece
+    global falling_piece_pos
+    global falling_piece_color
+
     # events
     for e in pygame.event.get():
         if e.type == pygame.QUIT:
@@ -187,6 +229,17 @@ def game_update():
     # main update
 
     check_rows()
+
+    falling_piece_pos[1] += 1
+    if not check_falling_piece():
+        falling_piece_pos[1] -= 1
+
+        tiles = translate_falling_piece()
+
+        for tile in tiles:
+            level[tile[1]][tile[0]] = falling_piece_color
+
+        pick_next_piece()
 
 def draw_frame():
     update_anim()
@@ -228,3 +281,5 @@ while True:
     game_update()
 
     draw_frame()
+
+    time.sleep(.1)
