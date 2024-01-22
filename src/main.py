@@ -218,6 +218,7 @@ def process_user():
     global falling_piece_color
     global screenshake_amount
     global was_pressed
+    global update_timestamp
 
     # events
     for e in pygame.event.get():
@@ -230,6 +231,8 @@ def process_user():
     keys = pygame.key.get_pressed()
 
     # some delicious movement code spaghetti
+
+    # move left
     if keys[pygame.K_a] and was_pressed[0] == False:
         was_pressed[0] = True
         falling_piece_pos[0] -= 1
@@ -239,6 +242,7 @@ def process_user():
     if not keys[pygame.K_a] and was_pressed[0]:
         was_pressed[0] = False
 
+    # move right
     if keys[pygame.K_d] and was_pressed[1] == False:
         was_pressed[1] = True
         falling_piece_pos[0] += 1
@@ -248,6 +252,7 @@ def process_user():
     if not keys[pygame.K_d] and was_pressed[1]:
         was_pressed[1] = False
 
+    # rotate clockwise
     if keys[pygame.K_e] and was_pressed[2] == False and not falling_piece == piece_lib[0]:
         was_pressed[2] = True
         falling_piece_pos[2] = (falling_piece_pos[2] - 1) % 4
@@ -257,6 +262,7 @@ def process_user():
     if not keys[pygame.K_e] and was_pressed[2]:
         was_pressed[2] = False
 
+    # rotate couterclockwise
     if keys[pygame.K_q] and was_pressed[3] == False and not falling_piece == piece_lib[0]:
         was_pressed[3] = True
         falling_piece_pos[2] = (falling_piece_pos[2] + 1) % 4
@@ -266,6 +272,7 @@ def process_user():
     if not keys[pygame.K_q] and was_pressed[3]:
         was_pressed[3] = False
 
+    # SMASH down
     if keys[pygame.K_s] and was_pressed[4] == False:
         was_pressed[4] = True
         screenshake_amount += 20
@@ -274,6 +281,9 @@ def process_user():
             falling_piece_pos[1] += 1
 
         falling_piece_pos[1] -= 1
+
+        # force next game loop to update the game state
+        update_timestamp = 0.6
 
     if not keys[pygame.K_s] and was_pressed[4]:
         was_pressed[4] = False
@@ -284,8 +294,6 @@ def game_update():
     global falling_piece_color
     global screenshake_amount
 
-    check_rows()
-
     falling_piece_pos[1] += 1
     if not check_falling_piece():
         falling_piece_pos[1] -= 1
@@ -294,6 +302,8 @@ def game_update():
 
         for tile in tiles:
             level[tile[1]][tile[0]] = falling_piece_color
+
+        check_rows()
 
         pick_next_piece()
 
