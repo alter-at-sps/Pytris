@@ -7,7 +7,7 @@ import random
 
 res = (1280, 720)
 
-desend_speed = 5
+game_speed = 0.5 # seconds per update
 level_size = (10, 20)
 
 tile_size = 15
@@ -18,6 +18,8 @@ border_margins = 4
 
 border_color = (200, 200, 200)
 none_color = (16, 16, 16)
+
+score_y_fraction = 1.4
 
 # contains positions of tiles relative to the center of rotation of a piece
 piece_lib = [
@@ -84,15 +86,17 @@ falling_piece = []
 falling_piece_pos = [0, 0, 0] # x, y, rot (in world coord system; starting from top-left)
 falling_piece_color = 0
 
-# format: [row_index, anim_timestep]
-active_row_anims = []
-
 screenshake_amount = 0
 screenshake_offset = (.0, .0)
 
 # calculate proper render area size based on config
 render_area_size = (border_thickness * 2 + border_margins * 2 + level_size[0] * (tile_size + tile_margins * 2), border_thickness * 2 + border_margins * 2 + level_size[1] * (tile_size + tile_margins * 2))
 render_area_border = (res[0] // 2 - render_area_size[0] // 2, res[1] // 2 - render_area_size[1] // 2, render_area_size[0], render_area_size[1])
+
+score = 0
+
+score_pos = (res[0] // 2, res[1] // 2 - (render_area_size[1] // 2 * score_y_fraction))
+score_enthusiasm = 1
 
 current_time = time.time()
 delta_time = 0
@@ -107,6 +111,9 @@ pygame.init()
 
 win = pygame.display.set_mode(res, vsync=1)
 
+pygame.font.init()
+score_font = pygame.font.SysFont('Comic Sans MS', 30)
+
 for y in range(level_size[1]):
     row = []
     level.append(row)
@@ -119,16 +126,12 @@ for y in range(level_size[1]):
 
 # == update code ==
 
-# queues row completion animation
-def queue_row_anim(i):
-    active_row_anims.append([i, 0.0])
-
-# called after a row animation finishes
-def on_row_anim_finished(i):
+# called for rows that are filled
+def remove_row(i):
     # offset level
     for j in range(i, 0, -1):
         if not j == 0:
-            level[j] = level[j - 1]
+            level[j] = level[j - 1].copy() # note: copy to prevent a weird bug with mutiple references to a single row in level
         else:
             new_row = []
             level[j] = new_row
@@ -136,21 +139,11 @@ def on_row_anim_finished(i):
             for i in range(level_size[0]):
                 new_row.append(0)
 
-    # offset active anims
-    for anim in active_row_anims:
-        if anim[0] > i:
-            anim[0] -= 1
-
-# update animation timestamp
-def update_anim():
-    for anim in active_row_anims:
-        anim[1] += delta_time
-
-        if anim[1] > 1.0:
-            active_row_anims.remove(anim)
-
 # check rows for filled rows and queue animation
 def check_rows():
+    global score
+    global score_enthusiasm
+
     for i, row in enumerate(level):
         fully_filled = True
 
@@ -159,7 +152,9 @@ def check_rows():
                 fully_filled = False
         
         if fully_filled:
-            on_row_anim_finished(i) # temp until anims
+            remove_row(i)
+            score += 1
+            score_enthusiasm = 1.5
 
 # translates piece position local coords to world coords
 def translate_falling_piece():
@@ -283,7 +278,7 @@ def process_user():
         falling_piece_pos[1] -= 1
 
         # force next game loop to update the game state
-        update_timestamp = 0.6
+        update_timestamp = game_speed + .1
 
     if not keys[pygame.K_s] and was_pressed[4]:
         was_pressed[4] = False
@@ -304,24 +299,25 @@ def game_update():
             level[tile[1]][tile[0]] = falling_piece_color
 
         check_rows()
-
         pick_next_piece()
 
         # check game over
         if not check_falling_piece():
             pygame.quit()
+
+            print(f"Your final score is {score}!")
             exit()
 
 def draw_frame():
     global falling_piece_pos
     global screenshake_amount
     global screenshake_offset
+    global score_enthusiasm
 
     # per draw updates
 
-    update_anim()
-
     screenshake_amount = max(screenshake_amount - delta_time * 40, 0)
+    score_enthusiasm = max(score_enthusiasm - delta_time * 4, 1)
     screenshake_offset = (random.random() * 2 - 1, random.random() * 2 - 1)
 
     shake = (screenshake_offset[0] * screenshake_amount, screenshake_offset[1] * screenshake_amount)
@@ -338,8 +334,6 @@ def draw_frame():
 
     for y, row in enumerate(level):
         for x, tile in enumerate(row):
-            # TODO: render active anims
-
             if not tile == 0:
                 pos = world_to_screen_space((x, y))
                 pygame.draw.rect(win, color_lib[tile - 1], (pos[0] + shake[0], pos[1] + shake[1], tile_size, tile_size))
@@ -368,6 +362,16 @@ def draw_frame():
             pos = world_to_screen_space(tile_pos)
             pygame.draw.rect(win, color_lib[falling_piece_color - 1], (pos[0] + shake[0], pos[1] + shake[1], tile_size, tile_size))
 
+    # draw score
+            
+    text_surface = score_font.render(str(score), True, border_color)
+
+    txt_w, txt_h = text_surface.get_size()
+    text_surface = pygame.transform.smoothscale(
+        text_surface, (txt_w * score_enthusiasm, txt_h * score_enthusiasm))
+
+    win.blit(text_surface, (score_pos[0] - txt_h * score_enthusiasm // 4, score_pos[1]))
+
     pygame.display.flip()
 
 # == game loop ==
@@ -379,7 +383,7 @@ while True:
     current_time = time.time()
 
     # update only every timestep
-    if time.time() - update_timestamp >= 0.5:
+    if time.time() - update_timestamp >= game_speed:
         update_timestamp = time.time()
 
         game_update()
